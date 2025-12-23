@@ -1,0 +1,109 @@
+# SETUP --------------------------------------------------------------------------------------
+
+shell "bash -c 'rm -f dumps/*.dat'"
+
+shell "mkdir -p dumps"
+
+units           si              # SI units (domain in inches then converted)
+seed            11111           # random number seed for particle generation
+dimension       3
+
+# outflow in +x, periodic y,z. will inject at xlo (x=-1.5 in)
+boundary        o p p
+
+# domain size (inches, will be converted to meters)
+variable        xmin equal -1.5*0.0254      # -1.5 inches
+variable        xmax equal 1.5*0.0254       # +1.5 inches
+variable        ymin equal -0.565*0.0254    # -0.565 inches (1.13/2)
+variable 	    ymax equal 0.565*0.0254     # +0.565 inches
+variable	    zmin equal -0.125*0.0254    # -0.125 inches (0.25/2)
+variable	    zmax equal 0.125*0.0254     # +0.125 inches
+
+variable	    Lx equal ${xmax}-${xmin}
+variable        Ly equal ${ymax}-${ymin}
+variable        Lz equal ${zmax}-${zmin}
+
+create_box      ${xmin} ${xmax} ${ymin} ${ymax} ${zmin} ${zmax}
+
+# Gas properties (Xenon at 100 Pa inlet pressure)
+variable        P_inlet equal 100.0         # Pa
+variable        T equal 300.0               # K
+variable        m_xe equal 2.18e-25         # kg (xenon atomic mass)
+variable        kB equal 1.380649e-23       # J/K (Boltzmann constant)
+variable        mdot equal 10.0e-6          # kg/s (10 mg/s mass flow rate)
+
+# Calculate number density from ideal gas law: n = P/(kB*T)
+variable        nrho equal ${P_inlet}/(${kB}*${T})
+
+# Calculate mean velocity from mass flow rate
+# mdot = rho * v * A, where rho = n*m, A = Ly*Lz
+variable        A_inlet equal ${Ly}*${Lz}
+variable        vx equal ${mdot}/(${nrho}*${m_xe}*${A_inlet})
+
+variable 	    d equal 4.85e-10            # m (xenon collision diameter)
+variable 	    R equal 63.32               # J/(kg*K) (specific gas constant for Xe)
+variable        rho equal ${nrho}*${m_xe}   # kg/m^3
+variable 	    lambda equal ${kB}*${T}/(sqrt(2.0)*PI*${d}*${d}*${rho}*${R})  # m
+variable	    vbar equal sqrt(8*${kB}*${T}/(PI*${m_xe}))  # m/s
+
+print "INLET PRESSURE = ${P_inlet} Pa"
+print "TEMPERATURE = ${T} K"
+print "NUMBER DENSITY = ${nrho} #/m^3"
+print "MASS FLOW RATE = ${mdot} kg/s"
+print "INLET VELOCITY = ${vx} m/s"
+print "MEAN FREE PATH = ${lambda} m"
+print "MEAN MOLEC VEL = ${vbar} m/s"
+
+# grid resolution
+create_grid	    350 150 50                  # change however you want for different grid resolution
+balance_grid    rcb part                    # load balance across processors (recursive coordinate bisection)
+
+variable	    diag_freq equal 100         # dump diagnostics every _ timesteps
+variable 	    tstep equal 1.0e-6          # timestep (s)
+
+# SURFACE GEOMETRY ----------------------------------------------------------------------------
+
+read_surf	    surf/FlowDomain.surf group distributor     # create surface group "distributor"
+surf_collide 	diffuse_wall diffuse ${T} 1.0               # accommodation coefficient = 1.0
+surf_modify     distributor collide diffuse_wall
+
+# SPECIES AND MIXTURE -------------------------------------------------------------------------
+
+species         species/xe.species Xe       # load xenon species
+
+# set mixture properties
+mixture     	xenon Xe frac 1.0           # 100% xenon
+
+# mixture name, number density, velocity stream (vx, vy, vz), temperature
+mixture         xenon nrho ${nrho} vstream ${vx} 0.0 0.0 temp ${T}
+
+# particle weighting: set target number of simulation particles
+variable        Vol equal ${Lx}*${Ly}*${Lz}
+variable        Ns_target equal 200000.0
+variable        fnum      equal ${nrho}*${Vol}/${Ns_target}
+global          fnum ${fnum}                                # global bc will be queried by each new particle
+
+variable	    parts_per equal ${nrho}*${Vol}/${Ns_target}
+print "particles per particle = ${parts_per}"
+
+# global useful for stat query later
+global          nrho ${nrho}
+
+# create an initial fill (n 0 -> auto compute # of particles from fnum and nrho)
+create_particles	xenon n 0
+
+# continuous inflow; inject gas from xlo every step (fix -> run each time step, ID: "in")
+fix		        in emit/face xenon xlo
+
+# DIAGNOSTICS ---------------------------------------------------------------------------------
+
+# cell-averaged temperature
+compute         Tbox temp                                   # define a compute Tbox that calculates domain averaged temp
+
+stats           ${diag_freq}                                # print diagnostics every _ timesteps
+stats_style     step cpu np nattempt ncoll c_Tbox           # print timestep, runtime, particles, collision stats, avg temp
+
+timestep        ${tstep}
+collide		    vss xenon vss/xe.vss                        # variable soft sphere collision model
+
+run             10000
