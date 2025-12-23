@@ -35,8 +35,10 @@ variable        mdot equal 10.0e-6          # kg/s (10 mg/s mass flow rate)
 # Calculate number density from ideal gas law: n = P/(kB*T)
 variable        nrho equal ${P_inlet}/(${kB}*${T})
 
-# Calculate mean velocity from mass flow rate
-# mdot = rho * v * A, where rho = n*m, A = Ly*Lz
+# Calculate vx in from mass flow rate
+# Given: mdot = rho * velocity * area
+#        mdot = (nrho * m_xe) * vx * A_inlet
+#    =>  vx = mdot / (nrho * m_xe * A_inlet)
 variable        A_inlet equal ${Ly}*${Lz}
 variable        vx equal ${mdot}/(${nrho}*${m_xe}*${A_inlet})
 
@@ -55,8 +57,8 @@ print "MEAN FREE PATH = ${lambda} m"
 print "MEAN MOLEC VEL = ${vbar} m/s"
 
 # grid resolution
-create_grid	    350 150 50                  # change however you want for different grid resolution
-balance_grid    rcb part                    # load balance across processors (recursive coordinate bisection)
+create_grid	    200 150 100                 # change however you want for different grid resolution
+balance_grid    rcb part                    # load balance across processors: "recursive coordinate bisection"
 
 variable	    diag_freq equal 100         # dump diagnostics every _ timesteps
 variable 	    tstep equal 1.0e-6          # timestep (s)
@@ -79,7 +81,7 @@ mixture         xenon nrho ${nrho} vstream ${vx} 0.0 0.0 temp ${T}
 
 # particle weighting: set target number of simulation particles
 variable        Vol equal ${Lx}*${Ly}*${Lz}
-variable        Ns_target equal 200000.0
+variable        Ns_target equal 2000000.0
 variable        fnum      equal ${nrho}*${Vol}/${Ns_target}
 global          fnum ${fnum}                                # global bc will be queried by each new particle
 
@@ -97,11 +99,13 @@ fix		        in emit/face xenon xlo
 
 # DIAGNOSTICS ---------------------------------------------------------------------------------
 
-# cell-averaged temperature
-compute         Tbox temp                                   # define a compute Tbox that calculates domain averaged temp
+
+# per-grid pressure
+compute         prop_grid grid all xenon nrho
+dump            dump_grid grid all ${diag_freq} dumps/grid.*.dat id xlo ylo zlo xc yc zc c_prop_grid[1]
 
 stats           ${diag_freq}                                # print diagnostics every _ timesteps
-stats_style     step cpu np nattempt ncoll c_Tbox           # print timestep, runtime, particles, collision stats, avg temp
+stats_style     step cpu np nattempt ncoll                  # print timestep, runtime, particles, collision stats
 
 timestep        ${tstep}
 collide		    vss xenon vss/xe.vss                        # variable soft sphere collision model

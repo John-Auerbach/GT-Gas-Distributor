@@ -23,8 +23,8 @@ Temperature exponent in VSS viscosity relation μ ∝ T^ω. Paper above gives 0.
 - Alpha = 1.4 (standard VSS parameter for monatomic gases)
 
 ## Simulation Setup
-- Domain: 3.0" × 1.13" × 0.25" (76.2 mm × 28.7 mm × 6.35 mm)
-- Grid: 350 × 150 × 50 cells (2.625M total)
+- Domain: 3.0" x 1.13" x 0.25" (76.2 mm x 28.7 mm x 6.35 mm)
+- Grid: 300 x 300 x 300 cells
 - Inlet: 100 Pa, 10 mg/s mass flow, 300K
 - Gas: 100% Xenon
 - Surface: Accommodation coefficient = 1.0
