@@ -45,7 +45,7 @@ variable        vx equal ${mdot}/(${nrho}*${m_xe}*${A_inlet})
 variable 	    d equal 4.85e-10            # m (xenon collision diameter)
 variable 	    R equal 63.32               # J/(kg*K) (specific gas constant for Xe)
 variable        rho equal ${nrho}*${m_xe}   # kg/m^3
-variable 	    lambda equal ${kB}*${T}/(sqrt(2.0)*PI*${d}*${d}*${rho}*${R})  # m
+variable 	    lambda equal ${kB}/(sqrt(2.0)*PI*${d}*${d}*${rho}*${R})  # m
 variable	    vbar equal sqrt(8*${kB}*${T}/(PI*${m_xe}))  # m/s
 
 print "INLET PRESSURE = ${P_inlet} Pa"
@@ -81,7 +81,7 @@ mixture         xenon nrho ${nrho} vstream ${vx} 0.0 0.0 temp ${T}
 
 # particle weighting: set target number of simulation particles
 variable        Vol equal ${Lx}*${Ly}*${Lz}
-variable        Ns_target equal 2000000.0
+variable        Ns_target equal 200000.0
 variable        fnum      equal ${nrho}*${Vol}/${Ns_target}
 global          fnum ${fnum}                                # global bc will be queried by each new particle
 
